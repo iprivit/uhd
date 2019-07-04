@@ -169,8 +169,8 @@ class MboardRegsControl(object):
     MB_DATESTAMP    = 0x0004
     MB_GIT_HASH     = 0x0008
     MB_SCRATCH      = 0x000C
-    MB_NUM_CE       = 0x0010
-    MB_NUM_IO_CE    = 0x0014
+    MB_DEVICE_ID    = 0x0010
+    MB_RFNOC_INFO   = 0x0014
     MB_CLOCK_CTRL   = 0x0018
     MB_XADC_RB      = 0x001C
     MB_BUS_CLK_RATE = 0x0020
@@ -179,7 +179,18 @@ class MboardRegsControl(object):
     MB_SFP1_INFO    = 0x002C
     MB_GPIO_MASTER  = 0x0030
     MB_GPIO_RADIO_SRC  = 0x0034
-    MB_XBAR_BASEPORT   = 0x0038
+    MB_NUM_TIMEKEEPERS = 0x0048
+    # Timekeeper registers
+    MB_TIME_NOW_LO         = 0x1000
+    MB_TIME_NOW_HI         = 0x1004
+    MB_TIME_EVENT_LO       = 0x1008
+    MB_TIME_EVENT_HI       = 0x100C
+    MB_TIME_CTRL           = 0x1010
+    MB_TIME_LAST_PPS_LO    = 0x1014
+    MB_TIME_LAST_PPS_HI    = 0x1018
+    MB_TIME_BASE_PERIOD_LO = 0x101C
+    MB_TIME_BASE_PERIOD_HI = 0x1020
+    MB_TIMEKEEPER_OFFSET   = 12
 
     # Bitfield locations for the MB_CLOCK_CTRL register.
     MB_CLOCK_CTRL_PPS_SEL_INT_10 = 0 # pps_sel is one-hot encoded!
@@ -214,6 +225,24 @@ class MboardRegsControl(object):
         minor = compat_number & 0xff
         major = (compat_number>>16) & 0xff
         return (major, minor)
+
+    def set_device_id(self, device_id):
+        """
+        Set device ID
+        """
+        with self.regs:
+            self.log.trace("Writing MB_DEVICE_ID with 0x{:08X}".format(device_id))
+            return self.poke32(self.MB_DEVICE_ID, device_id)
+
+    def get_device_id(self):
+        """
+        Get device ID
+        """
+        with self.regs:
+            regs_val = self.peek32(self.MB_DEVICE_ID)
+            device_id = regs_val & 0x0000ffff
+            self.log.trace("Read MB_DEVICE_ID 0x{:08X}".format(device_id))
+            return device_id
 
     def set_fp_gpio_master(self, value):
         """set driver for front panel GPIO
@@ -416,10 +445,72 @@ class MboardRegsControl(object):
                              .format(sfp0_type, sfp1_type))
         return ""
 
-    def get_xbar_baseport(self):
-        "Get the RFNoC crossbar base port"
+    def get_num_timekeepers(self):
+        """
+        Return the number of timekeepers
+        """
         with self.regs:
-            return self.peek32(self.MB_XBAR_BASEPORT)
+            return self.peek32(self.MB_NUM_TIMEKEEPERS)
+
+    def get_timekeeper_time(self, tk_idx, last_pps):
+        """
+        Get the time in ticks
+
+        Arguments:
+        tk_idx: Index of timekeeper
+        next_pps: If True, get time at last PPS. Otherwise, get time now.
+        """
+        addr_lo = \
+            (self.MB_TIME_LAST_PPS_LO if last_pps else self.MB_TIME_NOW_LO) + \
+            tk_idx * self.MB_TIMEKEEPER_OFFSET
+        addr_hi = addr_lo + 4
+        with self.regs:
+            time_lo = self.peek32(addr_lo)
+            time_hi = self.peek32(addr_hi)
+        # TODO There's a chance that time_lo has rolled over before we've read
+        # time_hi. Figure out how to handle that.
+        return time_hi << 32 | time_lo
+
+
+    def set_timekeeper_time(self, tk_idx, ticks, next_pps):
+        """
+        Set the time in ticks
+
+        Arguments:
+        tk_idx: Index of timekeeper
+        ticks: Time in ticks
+        next_pps: If True, set time at next PPS. Otherwise, set time now.
+        """
+        addr_lo = \
+            self.MB_TIME_EVENT_LO + tk_idx * self.MB_TIMEKEEPER_OFFSET
+        addr_hi = addr_lo + 4
+        addr_ctrl = \
+            self.MB_TIME_CTRL + tk_idx * self.MB_TIMEKEEPER_OFFSET
+        time_lo = ticks & 0xFFFFFFFF
+        time_hi = (ticks > 32) & 0xFFFFFFFF
+        time_ctrl = 0x1 if next_pps else 0x2
+        with self.regs:
+            self.poke32(addr_lo, time_lo)
+            self.poke32(addr_hi, time_hi)
+            self.poke32(addr_ctrl, time_ctrl)
+
+    def set_tick_period(self, tk_idx, period_ns):
+        """
+        Set the time per tick in nanoseconds (tick period)
+
+        Arguments:
+        tk_idx: Index of timekeeper
+        period_ns: Period in nanoseconds
+        """
+        addr_lo = self.MB_TIME_BASE_PERIOD_LO + tk_idx * self.MB_TIMEKEEPER_OFFSET
+        addr_hi = addr_lo + 4
+        period_lo = period_ns & 0xFFFFFFFF
+        period_hi = (period_ns > 32) & 0xFFFFFFFF
+        with self.regs:
+            self.poke32(addr_lo, period_lo)
+            self.poke32(addr_hi, period_hi)
+
+
 
 class RetimerQSFP(DS125DF410):
     # (deemphasis, swing)

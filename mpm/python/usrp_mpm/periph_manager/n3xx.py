@@ -41,7 +41,7 @@ N3XX_DEFAULT_ENABLE_PPS_EXPORT = True
 N32X_DEFAULT_QSFP_RATE_PRESET = 'Ethernet'
 N32X_DEFAULT_QSFP_DRIVER_PRESET = 'Optical'
 N32X_QSFP_I2C_LABEL = 'qsfp-i2c'
-N3XX_FPGA_COMPAT = (5, 3)
+N3XX_FPGA_COMPAT = (6, 0)
 N3XX_MONITOR_THREAD_INTERVAL = 1.0 # seconds
 
 # Import daughterboard PIDs from their respective classes
@@ -54,37 +54,21 @@ RHODIUM_PID = Rhodium.pids[0]
 ###############################################################################
 class N3xxXportMgrUDP(XportMgrUDP):
     " N3xx-specific UDP configuration "
-    xbar_dev = "/dev/crossbar0"
     iface_config = {
         'bridge0': {
             'label': 'misc-enet-regs0',
-            'xbar': 0,
-            'xbar_port': 0,
-            'ctrl_src_addr': 0,
         },
         'sfp0': {
             'label': 'misc-enet-regs0',
-            'xbar': 0,
-            'xbar_port': 0,
-            'ctrl_src_addr': 0,
         },
         'sfp1': {
             'label': 'misc-enet-regs1',
-            'xbar': 0,
-            'xbar_port': 1,
-            'ctrl_src_addr': 1,
         },
         'eth1': {
             'label': 'misc-enet-regs0',
-            'xbar': 0,
-            'xbar_port': 0,
-            'ctrl_src_addr': 0,
         },
         'eth2': {
             'label': 'misc-enet-regs1',
-            'xbar': 0,
-            'xbar_port': 1,
-            'ctrl_src_addr': 1,
         },
     }
     bridges = {'bridge0': ['sfp0', 'sfp1', 'bridge0']}
@@ -92,8 +76,6 @@ class N3xxXportMgrUDP(XportMgrUDP):
 class N3xxXportMgrLiberio(XportMgrLiberio):
     " N3xx-specific Liberio configuration "
     max_chan = 10
-    xbar_dev = "/dev/crossbar0"
-    xbar_port = 2
 
 ###############################################################################
 # Main Class
@@ -351,7 +333,6 @@ class n3xx(ZynqComponents, PeriphManagerBase):
         self.mboard_regs_control.get_git_hash()
         self.mboard_regs_control.get_build_timestamp()
         self._check_fpga_compat()
-        self.crossbar_base_port = self.mboard_regs_control.get_xbar_baseport()
         # Init clocking
         self.enable_ref_clock(enable=True)
         self._ext_clock_freq = None
@@ -549,6 +530,38 @@ class n3xx(ZynqComponents, PeriphManagerBase):
         elif self.device_info['rpc_connection'] == 'local':
             return self._xport_mgrs['liberio'].commit_xport(sid, xport_info)
 
+    def get_chdr_link_types(self):
+        """
+        This will only ever return a single item (udp or liberio).
+        """
+        assert self.mboard_info['rpc_connection'] in ('remote', 'local')
+        if self.mboard_info['rpc_connection'] == 'remote':
+            return ["udp"]
+        # else:
+        return ["liberio"]
+
+    def get_chdr_link_options(self, xport_type):
+        """
+        Returns a list of dictionaries. Every dictionary contains information
+        about one way to connect to this device in order to initiate CHDR
+        traffic.
+
+        The interpretation of the return value is very highly dependant on the
+        transport type (xport_type).
+        For UDP, the every entry of the list has the following keys:
+        - ipv4 (IP Address)
+        - port (UDP port)
+        - link_rate (bps of the link, e.g. 10e9 for 10GigE)
+
+        For Liberio, every entry has the following keys:
+        - tx_dev: TX device (/dev/tx-dma*)
+        - rx_dev: RX device (/dev/rx-dma*)
+        """
+        if xport_type not in self._xport_mgrs:
+            self.log.warning("Can't get link options for unknown link type: `{}'.")
+            return []
+        return self._xport_mgrs[xport_type].get_chdr_link_options()
+
     ###########################################################################
     # Device info
     ###########################################################################
@@ -567,6 +580,23 @@ class n3xx(ZynqComponents, PeriphManagerBase):
             'fpga': self.updateable_components.get('fpga', {}).get('type', ""),
         })
         return device_info
+
+    def set_device_id(self, device_id):
+        """
+        Sets the device ID for this motherboard.
+        The device ID is used to identify the RFNoC components associated with
+        this motherboard.
+        """
+        self.log.debug("Setting device ID to `{}'".format(device_id))
+        self.mboard_regs_control.set_device_id(device_id)
+
+    def get_device_id(self):
+        """
+        Gets the device ID for this motherboard.
+        The device ID is used to identify the RFNoC components associated with
+        this motherboard.
+        """
+        return self.mboard_regs_control.get_device_id()
 
     ###########################################################################
     # Clock/Time API
@@ -1058,3 +1088,60 @@ class n3xx(ZynqComponents, PeriphManagerBase):
         if self._bp_leds is not None:
             # Turn off LINK
             self._bp_leds.set(self._bp_leds.LED_LINK, 0)
+
+    #######################################################################
+    # Timekeeper API
+    #######################################################################
+    def get_num_timekeepers(self):
+        """
+        Return the number of timekeepers
+        """
+        return self.mboard_regs_control.get_num_timekeepers()
+
+    def get_timekeeper_time(self, tk_idx, last_pps):
+        """
+        Get the time in ticks
+
+        Arguments:
+        tk_idx: Index of timekeeper
+        next_pps: If True, get time at last PPS. Otherwise, get time now.
+        """
+        return self.mboard_regs_control.get_timekeeper_time(tk_idx, last_pps)
+
+    def set_timekeeper_time(self, tk_idx, ticks, next_pps):
+        """
+        Set the time in ticks
+
+        Arguments:
+        tk_idx: Index of timekeeper
+        ticks: Time in ticks
+        next_pps: If True, set time at next PPS. Otherwise, set time now.
+        """
+        self.mboard_regs_control.set_timekeeper_time(tk_idx, ticks, next_pps)
+
+    def set_tick_period(self, tk_idx, period_ns):
+        """
+        Set the time per tick in nanoseconds (tick period)
+
+        Arguments:
+        tk_idx: Index of timekeeper
+        period_ns: Period in nanoseconds
+        """
+        self.mboard_regs_control.set_tick_period(tk_idx, period_ns)
+
+    def get_clocks(self):
+        """
+        Gets the RFNoC-related clocks present in the FPGA design
+        """
+        return [
+            {
+                'name': 'radio_clk',
+                'freq': str(self.dboards[0].get_master_clock_rate()),
+                'mutable': 'true'
+            },
+            {
+                'name': 'bus_clk',
+                'freq': str(200e6),
+            }
+        ]
+
