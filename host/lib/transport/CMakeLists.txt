@@ -130,7 +130,6 @@ LIBUHD_APPEND_SOURCES(
 if(ENABLE_X300)
     LIBUHD_APPEND_SOURCES(
         ${CMAKE_CURRENT_SOURCE_DIR}/nirio_link.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/nirio_zero_copy.cpp
     )
 endif(ENABLE_X300)
 
@@ -149,12 +148,4 @@ if(ENABLE_DPDK)
         ${CMAKE_CURRENT_SOURCE_DIR}/dpdk_simple.cpp
     )
 endif(ENABLE_DPDK)
-
-# Verbose Debug output for send/recv
-set( UHD_TXRX_DEBUG_PRINTS OFF CACHE BOOL "Use verbose debug output for send/recv" )
-option( UHD_TXRX_DEBUG_PRINTS "Use verbose debug output for send/recv" "" )
-if(UHD_TXRX_DEBUG_PRINTS)
-	message(STATUS "Using verbose debug output for send/recv")
-	add_definitions(-DUHD_TXRX_DEBUG_PRINTS)
-endif()
 

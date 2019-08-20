@@ -1,5 +1,5 @@
 #
-# Copyright 2019 Ettus Research, A National Instruments Company
+# Copyright 2019 Ettus Research, A National Instruments Brand
 #
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
@@ -16,8 +16,8 @@ include $(BASE_DIR)/../tools/make/viv_sim_preamble.mak
 # Design Specific
 #-------------------------------------------------
 # Include makefiles and sources for the DUT and its dependencies
-include $(BASE_DIR)/../lib/erfnoc/core/Makefile.srcs
-include $(BASE_DIR)/../lib/erfnoc/utils/Makefile.srcs
+include $(BASE_DIR)/../lib/rfnoc/core/Makefile.srcs
+include $(BASE_DIR)/../lib/rfnoc/utils/Makefile.srcs
 include Makefile.srcs
 
 DESIGN_SRCS += $(abspath ${"\\"}
@@ -29,13 +29,13 @@ $(RFNOC_BLOCK_${config.module_name.upper()}_SRCS) ${"\\"}
 #-------------------------------------------------
 # Testbench Specific
 #-------------------------------------------------
-include $(BASE_DIR)/../sim/erfnoc/Makefile.srcs
+include $(BASE_DIR)/../sim/rfnoc/Makefile.srcs
 
 SIM_TOP = rfnoc_block_${config.module_name}_tb
 
 SIM_SRCS = ${"\\"}
 $(abspath rfnoc_block_${config.module_name}_tb.sv) ${"\\"}
-$(SIM_ERFNOC_SRCS)
+$(SIM_RFNOC_SRCS)
 
 # MODELSIM_USER_DO = $(abspath wave.do)
 
