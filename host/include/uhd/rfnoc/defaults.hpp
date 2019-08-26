@@ -26,6 +26,9 @@ static const std::string PROP_KEY_FREQ("freq");
 static const std::string PROP_KEY_TICK_RATE("tick_rate");
 static const std::string PROP_KEY_SPP("spp");
 static const std::string PROP_KEY_MTU("mtu");
+static const std::string PROP_KEY_MAGNITUDE("magnitude");
+static const std::string PROP_KEY_DIRECTION("direction");
+static const std::string PROP_KEY_SHIFT("shift");
 
 static const std::string NODE_ID_SEP("SEP");
 
