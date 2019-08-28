@@ -58,10 +58,6 @@ set(test_sources
     tx_streamer_test.cpp
 )
 
-set(benchmark_sources
-    packet_handler_benchmark.cpp
-)
-
 #turn each test cpp file into an executable with an int main() function
 add_definitions(-DBOOST_TEST_DYN_LINK -DBOOST_TEST_MAIN)
 
@@ -120,7 +116,7 @@ macro(UHD_ADD_NONAPI_TEST)
     get_filename_component(test_name ${test_TARGET} NAME_WE)
     include_directories(${test_INCLUDE_DIRS})
     add_executable(${test_name} ${test_TARGET} ${test_EXTRA_SOURCES})
-    target_link_libraries(${test_name} uhd ${Boost_LIBRARIES})
+    target_link_libraries(${test_name} uhd uhd_test ${Boost_LIBRARIES})
     if(NOT ${test_NOAUTORUN})
         UHD_ADD_TEST(${test_name} ${test_name})
     endif(NOT ${test_NOAUTORUN})
@@ -186,6 +182,11 @@ UHD_ADD_NONAPI_TEST(
     INCLUDE_DIRS
     ${CMAKE_BINARY_DIR}/lib/rfnoc/nocscript/
     ${CMAKE_SOURCE_DIR}/lib/rfnoc/nocscript/
+)
+
+UHD_ADD_NONAPI_TEST(
+    TARGET "packet_handler_benchmark.cpp"
+    NOAUTORUN
 )
 
 UHD_ADD_NONAPI_TEST(
