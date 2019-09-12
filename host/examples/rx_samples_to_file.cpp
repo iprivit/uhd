@@ -320,6 +320,9 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
                          % (usrp->get_rx_freq(channel) / 1e6)
                   << std::endl
                   << std::endl;
+        usrp->set_rx_lo_export_enabled(true, "all", 0);
+        std::cout << "LO1 export enabled: " << usrp->get_rx_lo_export_enabled()
+                  << " LO freq: " << usrp->get_rx_lo_freq("LO1", 0) << std::endl;
     }
 
     // set the rf gain
